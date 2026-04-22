@@ -12,6 +12,7 @@ interface TaskFormProps {
 export function TaskForm({ onClose }: TaskFormProps) {
   const { categories, addTask } = useTaskStore();
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [category, setCategory] = useState(categories[0]?.id || '');
   const [priority, setPriority] = useState<Priority>('medium');
   const [deadline, setDeadline] = useState('');
@@ -23,10 +24,12 @@ export function TaskForm({ onClose }: TaskFormProps) {
 
     addTask({
       title: title.trim(),
+      description: description.trim(),
       category,
       priority,
       deadline: deadline || null,
       completed: false,
+      subtasks: [],
     });
 
     onClose();
@@ -121,6 +124,20 @@ export function TaskForm({ onClose }: TaskFormProps) {
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
               className="w-full px-4 py-3 rounded-xl border-2 border-cream focus:border-lavender bg-cream/30 font-medium transition-all duration-200 outline-none"
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-500 mb-2">
+              备注
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="添加备注信息..."
+              rows={3}
+              className="w-full px-4 py-3 rounded-xl border-2 border-cream focus:border-lavender bg-cream/30 font-medium transition-all duration-200 outline-none resize-none"
             />
           </div>
         </div>

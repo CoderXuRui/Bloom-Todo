@@ -13,27 +13,29 @@ interface TaskStore {
   deleteTask: (id: string) => void;
   toggleTask: (id: string) => void;
 
+  // Subtask actions
+  addSubtask: (taskId: string, title: string) => void;
+  toggleSubtask: (taskId: string, subtaskId: string) => void;
+  deleteSubtask: (taskId: string, subtaskId: string) => void;
+
   // Category actions
   addCategory: (name: string, color: string) => void;
   updateCategory: (id: string, updates: Partial<Category>) => void;
   deleteCategory: (id: string) => void;
-
-  // Data management
-  exportData: () => string;
-  importData: (data: string) => boolean;
 }
 
-const defaultCategories: Category[] = [
-  { id: uuidv4(), name: '工作', color: '#FF8A8A' },
-  { id: uuidv4(), name: '学习', color: '#B5DEFF' },
-  { id: uuidv4(), name: '生活', color: '#A8E6CF' },
+// 固定的默认分类ID，避免每次刷新不一致
+const DEFAULT_CATEGORIES: Category[] = [
+  { id: 'cat-work', name: '工作', color: '#FF8A8A' },
+  { id: 'cat-study', name: '学习', color: '#B5DEFF' },
+  { id: 'cat-life', name: '生活', color: '#A8E6CF' },
 ];
 
 export const useTaskStore = create<TaskStore>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       tasks: [],
-      categories: defaultCategories,
+      categories: DEFAULT_CATEGORIES,
 
       addTask: (task) =>
         set((state) => ({
@@ -43,6 +45,7 @@ export const useTaskStore = create<TaskStore>()(
               ...task,
               id: uuidv4(),
               createdAt: new Date().toISOString(),
+              subtasks: [],
             },
           ],
         })),
@@ -63,6 +66,47 @@ export const useTaskStore = create<TaskStore>()(
         set((state) => ({
           tasks: state.tasks.map((task) =>
             task.id === id ? { ...task, completed: !task.completed } : task
+          ),
+        })),
+
+      addSubtask: (taskId, title) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === taskId
+              ? {
+                  ...task,
+                  subtasks: [
+                    ...task.subtasks,
+                    { id: uuidv4(), title, completed: false },
+                  ],
+                }
+              : task
+          ),
+        })),
+
+      toggleSubtask: (taskId, subtaskId) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === taskId
+              ? {
+                  ...task,
+                  subtasks: task.subtasks.map((st) =>
+                    st.id === subtaskId ? { ...st, completed: !st.completed } : st
+                  ),
+                }
+              : task
+          ),
+        })),
+
+      deleteSubtask: (taskId, subtaskId) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === taskId
+              ? {
+                  ...task,
+                  subtasks: task.subtasks.filter((st) => st.id !== subtaskId),
+                }
+              : task
           ),
         })),
 
@@ -88,33 +132,24 @@ export const useTaskStore = create<TaskStore>()(
             task.category === id ? { ...task, category: '' } : task
           ),
         })),
-
-      exportData: () => {
-        const state = get();
-        return JSON.stringify({
-          tasks: state.tasks,
-          categories: state.categories,
-          exportedAt: new Date().toISOString(),
-        }, null, 2);
-      },
-
-      importData: (data) => {
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.tasks && Array.isArray(parsed.tasks)) {
-            set({ tasks: parsed.tasks });
-          }
-          if (parsed.categories && Array.isArray(parsed.categories)) {
-            set({ categories: parsed.categories });
-          }
-          return true;
-        } catch {
-          return false;
-        }
-      },
     }),
     {
       name: 'todo-storage',
+      version: 1,
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          // 确保所有task都有subtasks和description
+          state.tasks = state.tasks.map((task) => ({
+            ...task,
+            subtasks: task.subtasks || [],
+            description: task.description || '',
+          }));
+          // 确保有默认分类
+          if (!state.categories || state.categories.length === 0) {
+            state.categories = DEFAULT_CATEGORIES;
+          }
+        }
+      },
     }
   )
 );

@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useTaskStore } from '../stores/taskStore';
 import type { Task } from '../types';
 import { formatDate, getPriorityColor } from '../utils/date';
+import { playCompleteSound, playSubtaskCompleteSound } from '../utils/sound';
 
 interface TaskCardProps {
   task: Task;
@@ -8,8 +10,20 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, onEdit }: TaskCardProps) {
-  const { toggleTask, deleteTask, categories } = useTaskStore();
+  const { toggleTask, deleteTask, categories, toggleSubtask, deleteSubtask, addSubtask } = useTaskStore();
+  const [expanded, setExpanded] = useState(false);
+  const [newSubtask, setNewSubtask] = useState('');
+
   const category = categories.find((c) => c.id === task.category);
+  const completedSubtasks = task.subtasks.filter((st) => st.completed).length;
+  const totalSubtasks = task.subtasks.length;
+
+  const handleAddSubtask = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubtask.trim()) return;
+    addSubtask(task.id, newSubtask.trim());
+    setNewSubtask('');
+  };
 
   return (
     <div
@@ -20,15 +34,20 @@ export function TaskCard({ task, onEdit }: TaskCardProps) {
       <div className="flex items-start gap-4">
         {/* Checkbox */}
         <button
-          onClick={() => toggleTask(task.id)}
-          className={`flex-shrink-0 w-7 h-7 rounded-full border-3 transition-all duration-300 flex items-center justify-center ${
+          onClick={() => {
+            if (!task.completed) {
+              playCompleteSound();
+            }
+            toggleTask(task.id);
+          }}
+          className={`flex-shrink-0 w-8 h-8 rounded-full border-4 transition-all duration-300 flex items-center justify-center ${
             task.completed
-              ? 'bg-mint border-mint scale-110'
-              : 'border-blush hover:border-coral hover:scale-110'
+              ? 'bg-mint border-mint scale-110 shadow-md'
+              : 'border-blush hover:border-coral hover:scale-110 bg-white'
           }`}
         >
           {task.completed && (
-            <span className="text-white text-sm animate-pop">✓</span>
+            <span className="text-white text-lg font-bold animate-pop">✓</span>
           )}
         </button>
 
@@ -42,6 +61,18 @@ export function TaskCard({ task, onEdit }: TaskCardProps) {
             >
               {task.title}
             </h3>
+
+            {/* Subtask toggle */}
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className={`text-xs px-2 py-0.5 rounded-full transition-colors ${
+                expanded
+                  ? 'bg-lavender text-white'
+                  : 'bg-lavender/20 text-lavender hover:bg-lavender/30'
+              }`}
+            >
+              📋 子任务 {totalSubtasks > 0 && `${completedSubtasks}/${totalSubtasks}`}
+            </button>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
@@ -76,6 +107,77 @@ export function TaskCard({ task, onEdit }: TaskCardProps) {
               </span>
             )}
           </div>
+
+          {/* Description */}
+          {task.description && (
+            <div className="mt-2 text-sm text-gray-500 bg-cream/50 rounded-lg p-3">
+              📝 {task.description}
+            </div>
+          )}
+
+          {/* Subtasks */}
+          {expanded && (
+            <div className="mt-4 space-y-2 animate-fade-in">
+              {task.subtasks.map((subtask) => (
+                <div
+                  key={subtask.id}
+                  className="flex items-center gap-3 pl-2 py-1 rounded-lg hover:bg-cream/50 group/subtask"
+                >
+                  <button
+                    onClick={() => {
+                      if (!subtask.completed) {
+                        playSubtaskCompleteSound();
+                      }
+                      toggleSubtask(task.id, subtask.id);
+                    }}
+                    className={`w-5 h-5 rounded-full border-2 transition-all duration-200 flex items-center justify-center flex-shrink-0 ${
+                      subtask.completed
+                        ? 'bg-mint border-mint'
+                        : 'border-blush/50 hover:border-blush bg-white'
+                    }`}
+                  >
+                    {subtask.completed && (
+                      <span className="text-white text-xs font-bold">✓</span>
+                    )}
+                  </button>
+                  <span
+                    className={`text-sm flex-1 transition-all duration-200 ${
+                      subtask.completed ? 'line-through text-gray-400' : 'text-gray-600'
+                    }`}
+                  >
+                    {subtask.title}
+                  </span>
+                  <button
+                    onClick={() => deleteSubtask(task.id, subtask.id)}
+                    className="opacity-0 group-hover/subtask:opacity-100 p-1 rounded hover:bg-coral/20 text-gray-400 hover:text-coral transition-all"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+
+              {/* Add subtask form */}
+              <form onSubmit={handleAddSubtask} className="flex items-center gap-3 pl-2 pt-1">
+                <div className="w-5 h-5 rounded-full border-2 border-dashed border-lavender/40" />
+                <input
+                  type="text"
+                  value={newSubtask}
+                  onChange={(e) => setNewSubtask(e.target.value)}
+                  placeholder="添加子任务..."
+                  className="flex-1 text-sm bg-transparent outline-none text-gray-600 placeholder:text-gray-400"
+                />
+                <button
+                  type="submit"
+                  disabled={!newSubtask.trim()}
+                  className="text-xs px-3 py-1 rounded-full bg-lavender/20 text-lavender hover:bg-lavender/30 disabled:opacity-50 transition-colors"
+                >
+                  添加
+                </button>
+              </form>
+            </div>
+          )}
         </div>
 
         {/* Actions */}

@@ -5,13 +5,12 @@ import { CategoryFilter } from './components/CategoryFilter';
 import { TaskCard } from './components/TaskCard';
 import { TaskForm } from './components/TaskForm';
 import type { Task, Priority } from './types';
-import { format } from 'date-fns';
 
 type SortKey = 'date' | 'priority' | 'created';
 type SortOrder = 'asc' | 'desc';
 
 function App() {
-  const { tasks, exportData, importData } = useTaskStore();
+  const { tasks } = useTaskStore();
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [filterCategory, setFilterCategory] = useState('all');
@@ -56,40 +55,6 @@ function App() {
 
     return result;
   }, [tasks, filterCategory, sortKey, sortOrder]);
-
-  const handleExport = () => {
-    const data = exportData();
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `todo-backup-${format(new Date(), 'yyyy-MM-dd')}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImport = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const content = e.target?.result as string;
-          const success = importData(content);
-          if (success) {
-            alert('导入成功！');
-          } else {
-            alert('导入失败，请检查文件格式。');
-          }
-        };
-        reader.readAsText(file);
-      }
-    };
-    input.click();
-  };
 
   return (
     <div className="min-h-screen bg-cream">
@@ -174,34 +139,12 @@ function App() {
         >
           +
         </button>
-
-        {/* Data management buttons */}
-        <div className="fixed bottom-8 left-8 flex gap-2">
-          <button
-            onClick={handleExport}
-            className="p-3 rounded-full bg-white shadow-soft text-gray-400 hover:text-mint hover:shadow-lift transition-all"
-            title="导出备份"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-          </button>
-          <button
-            onClick={handleImport}
-            className="p-3 rounded-full bg-white shadow-soft text-gray-400 hover:text-sky hover:shadow-lift transition-all"
-            title="导入备份"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-          </button>
-        </div>
       </div>
 
       {/* Task Form Modal */}
       {showForm && <TaskForm onClose={() => setShowForm(false)} />}
 
-      {/* Edit Modal - simplified for now */}
+      {/* Edit Modal */}
       {editingTask && (
         <TaskForm onClose={() => setEditingTask(null)} />
       )}
