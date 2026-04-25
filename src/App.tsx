@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { isThisWeek, parseISO } from 'date-fns';
 import {
   DndContext,
   closestCenter,
@@ -17,6 +18,7 @@ import { useTaskStore } from './stores/taskStore';
 import { usePomodoroStore } from './stores/pomodoroStore';
 import { useTheme } from './hooks/useTheme';
 import { Stats } from './components/Stats';
+import { QuoteBox } from './components/QuoteBox';
 import { CategoryFilter } from './components/CategoryFilter';
 import { TaskCard } from './components/TaskCard';
 import { SortableTaskCard } from './components/SortableTaskCard';
@@ -24,12 +26,12 @@ import { TaskForm } from './components/TaskForm';
 import { Pomodoro } from './components/Pomodoro';
 import type { Task, Priority } from './types';
 
-type SortKey = 'date' | 'priority' | 'created';
+type SortKey = 'date' | 'priority' | 'created' | 'manual';
 type SortOrder = 'asc' | 'desc';
 type ViewMode = 'tasks' | 'trash';
 
 function App() {
-  const { tasks, restoreTask, permanentDeleteTask, reorderTasks } = useTaskStore();
+  const { tasks, restoreTask, permanentDeleteTask, reorderTasksByOrder } = useTaskStore();
 
   const activeTasks = useMemo(() => tasks.filter((t) => t.deletedAt === null), [tasks]);
   const trashedTasks = useMemo(() => tasks.filter((t) => t.deletedAt !== null), [tasks]);
@@ -61,6 +63,22 @@ function App() {
   // Enable drag only when no filter/search in tasks view
   const canDrag = viewMode === 'tasks' && filterCategory === 'all' && !searchQuery.trim();
 
+  // 过期任务：今天截止且未完成
+  const overdueTasks = useMemo(() => {
+    if (viewMode !== 'tasks') return [];
+    const todayStr = new Date().toISOString().split('T')[0];
+    return activeTasks.filter((t) => !t.completed && t.deadline && t.deadline <= todayStr);
+  }, [activeTasks, viewMode]);
+
+  // 周回顾统计
+  const weekStats = useMemo(() => {
+    const completedThisWeek = activeTasks.filter(
+      (t) => t.completed && t.completedAt && isThisWeek(parseISO(t.completedAt))
+    ).length;
+    const pomodoroThisWeek = pomodoro.completedAt.filter((ts) => isThisWeek(parseISO(ts))).length;
+    return { completedThisWeek, pomodoroThisWeek };
+  }, [activeTasks, pomodoro.completedAt]);
+
   // Filter and sort tasks
   const filteredTasks = useMemo(() => {
     const source = viewMode === 'tasks' ? activeTasks : trashedTasks;
@@ -82,33 +100,35 @@ function App() {
       );
     }
 
-    // Sort
-    result.sort((a, b) => {
-      let cmp = 0;
-      switch (sortKey) {
-        case 'date':
-          if (!a.deadline && !b.deadline) cmp = 0;
-          else if (!a.deadline) cmp = 1;
-          else if (!b.deadline) cmp = -1;
-          else cmp = new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
-          break;
-        case 'priority':
-          const priorityOrder: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
-          cmp = priorityOrder[a.priority] - priorityOrder[b.priority];
-          break;
-        case 'created':
-          cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-          break;
-      }
-      return sortOrder === 'asc' ? cmp : -cmp;
-    });
-
-    // Put incomplete tasks first (only in tasks view)
-    if (viewMode === 'tasks') {
+    // Sort (skip when in manual order mode)
+    if (sortKey !== 'manual') {
       result.sort((a, b) => {
-        if (a.completed === b.completed) return 0;
-        return a.completed ? 1 : -1;
+        let cmp = 0;
+        switch (sortKey) {
+          case 'date':
+            if (!a.deadline && !b.deadline) cmp = 0;
+            else if (!a.deadline) cmp = 1;
+            else if (!b.deadline) cmp = -1;
+            else cmp = new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+            break;
+          case 'priority':
+            const priorityOrder: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
+            cmp = priorityOrder[a.priority] - priorityOrder[b.priority];
+            break;
+          case 'created':
+            cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+            break;
+        }
+        return sortOrder === 'asc' ? cmp : -cmp;
       });
+
+      // Put incomplete tasks first (only in tasks view, not in manual mode)
+      if (viewMode === 'tasks') {
+        result.sort((a, b) => {
+          if (a.completed === b.completed) return 0;
+          return a.completed ? 1 : -1;
+        });
+      }
     }
 
     return result;
@@ -116,9 +136,19 @@ function App() {
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    if (over && active.id !== over.id) {
-      reorderTasks(String(active.id), String(over.id));
-    }
+    if (!over || active.id === over.id) return;
+
+    // 基于当前可见列表 (filteredTasks) 计算新顺序，解决索引不一致问题
+    const oldIndex = filteredTasks.findIndex((t) => t.id === active.id);
+    const newIndex = filteredTasks.findIndex((t) => t.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const newOrder = [...filteredTasks];
+    const [moved] = newOrder.splice(oldIndex, 1);
+    newOrder.splice(newIndex, 0, moved);
+
+    reorderTasksByOrder(newOrder.map((t) => t.id));
+    setSortKey('manual');
   };
 
   const renderTaskList = () => {
@@ -186,6 +216,9 @@ function App() {
         <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-lavender/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }} />
       </div>
 
+      {/* 励志语录 - 浮动在左侧 */}
+      <QuoteBox />
+
       {/* Main container */}
       <div className="relative max-w-2xl mx-auto px-4 py-8">
         {/* Header */}
@@ -248,6 +281,44 @@ function App() {
         {/* Stats (only in tasks view) */}
         {viewMode === 'tasks' && <Stats />}
 
+        {/* 周回顾 */}
+        {viewMode === 'tasks' && (weekStats.completedThisWeek > 0 || weekStats.pomodoroThisWeek > 0) && (
+          <div className="flex items-center gap-3 mb-4 px-4 py-2.5 bg-white dark:bg-gray-800 rounded-xl shadow-soft text-sm">
+            <span className="text-gray-400 dark:text-gray-500">本周回顾</span>
+            {weekStats.completedThisWeek > 0 && (
+              <span className="font-semibold text-mint">✅ {weekStats.completedThisWeek} 个任务</span>
+            )}
+            {weekStats.pomodoroThisWeek > 0 && (
+              <span className="font-semibold text-coral">🍅 {weekStats.pomodoroThisWeek} 个番茄钟</span>
+            )}
+          </div>
+        )}
+
+        {/* 过期任务提醒 */}
+        {viewMode === 'tasks' && overdueTasks.length > 0 && (
+          <div className="mb-4 p-4 bg-coral/10 dark:bg-coral/20 border-2 border-coral/30 rounded-2xl animate-fade-in">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-lg">⏰</span>
+              <span className="font-semibold text-coral dark:text-coral">
+                {overdueTasks.length} 个任务今天截止
+              </span>
+            </div>
+            <div className="space-y-1">
+              {overdueTasks.slice(0, 3).map((task) => (
+                <div key={task.id} className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-coral flex-shrink-0" />
+                  {task.title}
+                </div>
+              ))}
+              {overdueTasks.length > 3 && (
+                <div className="text-xs text-gray-400 dark:text-gray-500 pl-3.5">
+                  还有 {overdueTasks.length - 3} 个...
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Search */}
         <div className="mb-4">
           <div className="relative">
@@ -298,6 +369,7 @@ function App() {
               <option value="created">按创建时间</option>
               <option value="date">按截止日期</option>
               <option value="priority">按优先级</option>
+              <option value="manual">自定义排序</option>
             </select>
             <button
               onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}

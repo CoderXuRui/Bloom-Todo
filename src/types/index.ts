@@ -14,9 +14,11 @@ export interface Task {
   priority: Priority;
   deadline: string | null;
   completed: boolean;
+  completedAt: string | null;
   createdAt: string;
   subtasks: Subtask[];
   deletedAt: string | null;
+  expanded: boolean;
 }
 
 export interface Category {

@@ -1,9 +1,10 @@
 const CACHE_NAME = 'bloom-todo-v2';
+// 使用相对路径，Service Worker 会基于自身注册位置解析
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/favicon.svg',
-  '/manifest.json',
+  './',
+  './index.html',
+  './favicon.svg',
+  './manifest.json',
 ];
 
 // Install: cache static assets
@@ -50,7 +51,7 @@ self.addEventListener('fetch', (event) => {
         }
         // Fallback for navigation requests
         if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
+          return caches.match('./index.html');
         }
       });
     })

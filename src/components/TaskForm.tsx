@@ -66,6 +66,12 @@ export function TaskForm({ onClose, task }: TaskFormProps) {
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && title.trim()) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              }}
               placeholder="今天要做什么呢？"
               className="w-full px-4 py-3 rounded-xl border-2 border-cream dark:border-gray-700 focus:border-lavender bg-cream/30 dark:bg-gray-700/50 text-gray-700 dark:text-gray-200 font-medium transition-all duration-200 outline-none"
               autoFocus
@@ -82,8 +88,15 @@ export function TaskForm({ onClose, task }: TaskFormProps) {
                 <button
                   key={cat.id}
                   type="button"
+                  tabIndex={0}
                   onClick={() => setCategory(cat.id)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setCategory(cat.id);
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-lavender focus-visible:ring-offset-2 ${
                     category === cat.id
                       ? 'scale-105 shadow-soft'
                       : 'opacity-60 hover:opacity-100'
@@ -109,8 +122,15 @@ export function TaskForm({ onClose, task }: TaskFormProps) {
                 <button
                   key={p}
                   type="button"
+                  tabIndex={0}
                   onClick={() => setPriority(p)}
-                  className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setPriority(p);
+                    }
+                  }}
+                  className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-lavender focus-visible:ring-offset-2 ${
                     priority === p ? 'scale-105 shadow-soft' : 'opacity-50 hover:opacity-100'
                   }`}
                   style={{

@@ -13,6 +13,7 @@ interface PomodoroState {
   timeLeft: number;
   isRunning: boolean;
   completedSessions: number;
+  completedAt: string[]; // ISO timestamps of each completed work session
   settings: PomodoroSettings;
   endAt: number | null;
 }
@@ -64,6 +65,7 @@ export const usePomodoroStore = create<PomodoroStore>()(
       timeLeft: DEFAULT_SETTINGS.workMinutes * 60,
       isRunning: false,
       completedSessions: 0,
+      completedAt: [],
       settings: { ...DEFAULT_SETTINGS },
       endAt: null,
 
@@ -122,6 +124,7 @@ export const usePomodoroStore = create<PomodoroStore>()(
         const state = get();
         const newMode = state.mode === 'work' ? 'break' : 'work';
         const newTimeLeft = getTotalSeconds(newMode, state.settings);
+        const now = new Date().toISOString();
 
         set({
           mode: newMode,
@@ -132,6 +135,10 @@ export const usePomodoroStore = create<PomodoroStore>()(
             state.mode === 'work'
               ? state.completedSessions + 1
               : state.completedSessions,
+          completedAt:
+            state.mode === 'work'
+              ? [...state.completedAt, now]
+              : state.completedAt,
         });
 
         // 播放提示音
@@ -167,10 +174,14 @@ export const usePomodoroStore = create<PomodoroStore>()(
         timeLeft: state.timeLeft,
         isRunning: state.isRunning,
         completedSessions: state.completedSessions,
+        completedAt: state.completedAt,
         settings: state.settings,
         endAt: state.endAt,
       }),
       onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.completedAt = state.completedAt || [];
+        }
         if (state && state.isRunning && state.endAt) {
           // 恢复时重新计算剩余时间
           const remaining = Math.max(0, Math.ceil((state.endAt - Date.now()) / 1000));

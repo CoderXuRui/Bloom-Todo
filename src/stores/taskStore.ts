@@ -8,10 +8,11 @@ interface TaskStore {
   categories: Category[];
 
   // Task actions
-  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'deletedAt'>) => void;
+  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'deletedAt' | 'completedAt' | 'expanded'>) => void;
+  toggleTask: (id: string) => void;
+  toggleExpanded: (id: string) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
-  toggleTask: (id: string) => void;
   restoreTask: (id: string) => void;
   permanentDeleteTask: (id: string) => void;
 
@@ -21,7 +22,7 @@ interface TaskStore {
   deleteSubtask: (taskId: string, subtaskId: string) => void;
 
   // Reorder
-  reorderTasks: (activeId: string, overId: string) => void;
+  reorderTasksByOrder: (orderedIds: string[]) => void;
 
   // Category actions
   addCategory: (name: string, color: string) => void;
@@ -51,6 +52,8 @@ export const useTaskStore = create<TaskStore>()(
               id: uuidv4(),
               createdAt: new Date().toISOString(),
               deletedAt: null,
+              completedAt: null,
+              expanded: false,
             },
           ],
         })),
@@ -72,7 +75,20 @@ export const useTaskStore = create<TaskStore>()(
       toggleTask: (id) =>
         set((state) => ({
           tasks: state.tasks.map((task) =>
-            task.id === id ? { ...task, completed: !task.completed } : task
+            task.id === id
+              ? {
+                  ...task,
+                  completed: !task.completed,
+                  completedAt: !task.completed ? new Date().toISOString() : null,
+                }
+              : task
+          ),
+        })),
+
+      toggleExpanded: (id) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === id ? { ...task, expanded: !task.expanded } : task
           ),
         })),
 
@@ -88,15 +104,26 @@ export const useTaskStore = create<TaskStore>()(
           tasks: state.tasks.filter((task) => task.id !== id),
         })),
 
-      reorderTasks: (activeId, overId) =>
+      reorderTasksByOrder: (orderedIds) =>
         set((state) => {
-          const oldIndex = state.tasks.findIndex((t) => t.id === activeId);
-          const newIndex = state.tasks.findIndex((t) => t.id === overId);
-          if (oldIndex === -1 || newIndex === -1) return state;
-          const newTasks = [...state.tasks];
-          const [removed] = newTasks.splice(oldIndex, 1);
-          newTasks.splice(newIndex, 0, removed);
-          return { tasks: newTasks };
+          const orderedSet = new Set(orderedIds);
+          const orderedTasks = orderedIds
+            .map((id) => state.tasks.find((t) => t.id === id))
+            .filter(Boolean) as Task[];
+
+          // 保持不可见任务的相对位置，将可见任务按新顺序插入它们原来的占位处
+          const result: Task[] = [];
+          let orderedIdx = 0;
+          for (const task of state.tasks) {
+            if (orderedSet.has(task.id)) {
+              if (orderedIdx < orderedTasks.length) {
+                result.push(orderedTasks[orderedIdx++]);
+              }
+            } else {
+              result.push(task);
+            }
+          }
+          return { tasks: result };
         }),
 
       addSubtask: (taskId, title) =>
@@ -165,19 +192,21 @@ export const useTaskStore = create<TaskStore>()(
     }),
     {
       name: 'todo-storage',
-      version: 2,
+      version: 3,
       partialize: (state) => ({
         tasks: state.tasks,
         categories: state.categories,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // 确保所有task都有subtasks、description、deletedAt
+          // 确保所有task都有新字段
           state.tasks = state.tasks.map((task) => ({
             ...task,
             subtasks: task.subtasks || [],
             description: task.description || '',
             deletedAt: task.deletedAt ?? null,
+            completedAt: task.completedAt ?? (task.completed ? new Date().toISOString() : null),
+            expanded: task.expanded ?? false,
           }));
           // 确保有默认分类
           if (!state.categories || state.categories.length === 0) {

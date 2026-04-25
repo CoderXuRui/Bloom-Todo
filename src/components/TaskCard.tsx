@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useTaskStore } from '../stores/taskStore';
 import type { Task } from '../types';
 import { formatDate, getPriorityColor } from '../utils/date';
@@ -14,10 +14,10 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, onEdit, viewMode = 'tasks', onRestore, onPermanentDelete }: TaskCardProps) {
-  const { toggleTask, deleteTask, categories, toggleSubtask, deleteSubtask, addSubtask } = useTaskStore();
-  const [expanded, setExpanded] = useState(false);
+  const { toggleTask, deleteTask, categories, toggleSubtask, deleteSubtask, addSubtask, toggleExpanded } = useTaskStore();
   const [newSubtask, setNewSubtask] = useState('');
   const checkboxRef = useRef<HTMLButtonElement>(null);
+  const subtaskInputRef = useRef<HTMLInputElement>(null);
   const { particles, trigger } = useCelebration();
 
   const category = categories.find((c) => c.id === task.category);
@@ -31,6 +31,13 @@ export function TaskCard({ task, onEdit, viewMode = 'tasks', onRestore, onPerman
     addSubtask(task.id, newSubtask.trim());
     setNewSubtask('');
   };
+
+  // 添加子任务后自动聚焦输入框
+  useEffect(() => {
+    if (task.expanded && subtaskInputRef.current) {
+      subtaskInputRef.current.focus();
+    }
+  }, [task.subtasks.length, task.expanded]);
 
   return (
     <div
@@ -93,14 +100,24 @@ export function TaskCard({ task, onEdit, viewMode = 'tasks', onRestore, onPerman
             {/* Subtask toggle (only in tasks view) */}
             {!isTrash && (
               <button
-                onClick={() => setExpanded(!expanded)}
-                className={`text-xs px-2 py-0.5 rounded-full transition-colors ${
-                  expanded
+                onClick={() => toggleExpanded(task.id)}
+                className={`text-xs px-2 py-0.5 rounded-full transition-colors flex items-center gap-1.5 ${
+                  task.expanded
                     ? 'bg-lavender text-white'
                     : 'bg-lavender/20 text-lavender hover:bg-lavender/30'
                 }`}
               >
                 📋 子任务 {totalSubtasks > 0 && `${completedSubtasks}/${totalSubtasks}`}
+                {totalSubtasks > 0 && (
+                  <span className="inline-flex items-center">
+                    <span className="w-10 h-1.5 bg-white/30 rounded-full overflow-hidden inline-block">
+                      <span
+                        className="block h-full bg-white rounded-full transition-all duration-300"
+                        style={{ width: `${(completedSubtasks / totalSubtasks) * 100}%` }}
+                      />
+                    </span>
+                  </span>
+                )}
               </button>
             )}
           </div>
@@ -151,7 +168,7 @@ export function TaskCard({ task, onEdit, viewMode = 'tasks', onRestore, onPerman
           )}
 
           {/* Subtasks (only in tasks view) */}
-          {!isTrash && expanded && (
+          {!isTrash && task.expanded && (
             <div className="mt-4 space-y-2 animate-fade-in">
               {task.subtasks.map((subtask) => (
                 <div
@@ -197,6 +214,7 @@ export function TaskCard({ task, onEdit, viewMode = 'tasks', onRestore, onPerman
               <form onSubmit={handleAddSubtask} className="flex items-center gap-3 pl-2 pt-1">
                 <div className="w-5 h-5 rounded-full border-2 border-dashed border-lavender/40" />
                 <input
+                  ref={subtaskInputRef}
                   type="text"
                   value={newSubtask}
                   onChange={(e) => setNewSubtask(e.target.value)}
